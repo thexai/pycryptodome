@@ -153,7 +153,7 @@ add_library(_raw_des3
 )
 
 if(_X86_ OR _X64_)
-add_library(_cpuid
+add_library(_cpuid_c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cpuid.c
 )
 endif()
@@ -292,7 +292,7 @@ set(CRYPTO_MATH _modexp)
 if(_X86_ OR _X64_)
   list(APPEND CRYPTO_HASH _ghash_clmul)
   list(APPEND CRYPTO_CIPHER _raw_aesni)
-  list(APPEND CRYPTO_UTIL _cpuid)
+  list(APPEND CRYPTO_UTIL _cpuid_c)
 endif()
 
 foreach(CRYPTO_LIB IN LISTS CRYPTO_HASH CRYPTO_CIPHER CRYPTO_UTIL CRYPTO_PROTOCOL CRYPTO_PUBLICKEY CRYPTO_MATH)
