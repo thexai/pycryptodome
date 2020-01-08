@@ -9,14 +9,19 @@ if(SEPARATE_NAMESPACE)
   set(NAMESPACE Cryptodome)
 endif()
 
-if(MSVC)
-  set(CMAKE_DEBUG_POSTFIX "d")
-endif()
-
 find_package(python REQUIRED NO_MODULE)
 
 include(CheckIncludeFile)
+include(CheckSymbolExists)
 
+check_symbol_exists(_X86_ "Windows.h" _X86_)
+check_symbol_exists(_AMD64_ "Windows.h" _AMD64_)
+check_symbol_exists(_ARM_ "Windows.h" _ARM_)
+check_symbol_exists(_ARM64_ "Windows.h" _ARM64_)
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} /arch:sse2")
+endif()
 CHECK_INCLUDE_FILE(intrin.h HAVE_INTRIN_H)
 CHECK_INCLUDE_FILE(cpuid.h HAVE_CPUID_H)
 
@@ -53,6 +58,14 @@ add_library(_MD4
   ${CMAKE_CURRENT_SOURCE_DIR}/src/MD4.c
 )
 
+add_library(_MD5
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/MD5.c
+)
+
+add_library(_SHA1
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/SHA1.c
+)
+
 add_library(_SHA256
   ${CMAKE_CURRENT_SOURCE_DIR}/src/SHA256.c
 )
@@ -85,12 +98,28 @@ add_library(_BLAKE2s
   ${CMAKE_CURRENT_SOURCE_DIR}/src/blake2s.c
 )
 
+add_library(_ghash_portable
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/ghash_portable.c
+)
+
+if(_X86_ OR _X64_)
+add_library(_ghash_clmul
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/ghash_clmul.c
+)
+endif()
+
+# MACs
+
+add_library(_poly1305
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/poly1305.c
+)
+
 # Block encryption algorithms
 add_library(_raw_aes
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AES.c
 )
 
-if((CMAKE_VS_PLATFORM_TOOLSET EQUAL win32) OR (CMAKE_VS_PLATFORM_TOOLSET EQUAL X64))
+if(_X86_ OR _X64_)
 add_library(_raw_aesni
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AESNI.c
 )
@@ -102,6 +131,13 @@ add_library(_raw_arc2
 
 add_library(_raw_blowfish
   ${CMAKE_CURRENT_SOURCE_DIR}/src/Blowfish.c
+)
+
+add_library(_raw_eksblowfish
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/Blowfish.c
+)
+target_compile_definitions(_raw_eksblowfish
+  PRIVATE EKS
 )
 
 add_library(_raw_cast
@@ -116,7 +152,7 @@ add_library(_raw_des3
   ${CMAKE_CURRENT_SOURCE_DIR}/src/DES3.c
 )
 
-if((CMAKE_VS_PLATFORM_TOOLSET EQUAL win32) OR (CMAKE_VS_PLATFORM_TOOLSET EQUAL X64))
+if(_X86_ OR _X64_)
 add_library(_cpuid
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cpuid.c
 )
@@ -170,9 +206,55 @@ add_library(_strxor
   ${CMAKE_CURRENT_SOURCE_DIR}/src/strxor.c
 )
 
+# ECC
+add_library(_ec_ws
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/modexp_utils.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/siphash.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/ec_ws.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/mont.c
+)
+target_compile_definitions(_ec_ws
+  PRIVATE SYS_BITS=${CMAKE_SIZEOF_VOID_P}*8
+)
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  target_sources(_ec_ws
+    PRIVATE 
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/multiply_64.c
+  )
+else()
+  target_sources(_ec_ws
+    PRIVATE 
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/multiply_32.c
+  )
+endif()
+
+# Math
+add_library(_modexp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/modexp_utils.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/siphash.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/modexp.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/mont.c
+)
+target_compile_definitions(_modexp
+  PRIVATE SYS_BITS=${CMAKE_SIZEOF_VOID_P}*8
+)
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  target_sources(_modexp
+    PRIVATE 
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/multiply_64.c
+  )
+else()
+  target_sources(_modexp
+    PRIVATE 
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/multiply_32.c
+  )
+endif()
+
 set(CRYPTO_HASH
   _MD2
   _MD4
+  _MD5
+  _SHA1
   _SHA256
   _SHA224
   _SHA384
@@ -181,11 +263,14 @@ set(CRYPTO_HASH
   _keccak
   _BLAKE2b
   _BLAKE2s
+  _poly1305
+  _ghash_portable
 )
 set(CRYPTO_CIPHER
   _raw_aes
   _raw_arc2
   _raw_blowfish
+  _raw_eksblowfish
   _raw_cast
   _raw_des
   _raw_des3
@@ -201,32 +286,50 @@ set(CRYPTO_CIPHER
 )
 set(CRYPTO_UTIL _strxor)
 set(CRYPTO_PROTOCOL _scrypt)
+set(CRYPTO_PUBLICKEY _ec_ws)
+set(CRYPTO_MATH _modexp)
 
-if((CMAKE_VS_PLATFORM_TOOLSET EQUAL win32) OR (CMAKE_VS_PLATFORM_TOOLSET EQUAL X64))
-  set(CRYPTO_CIPHER "${CRYPTO_CIPHER} _raw_aesni")
-  set(CRYPTO_UTIL "${CRYPTO_UTIL} _cpuid")
+if(_X86_ OR _X64_)
+  list(APPEND CRYPTO_HASH _ghash_clmul)
+  list(APPEND CRYPTO_CIPHER _raw_aesni)
+  list(APPEND CRYPTO_UTIL _cpuid)
 endif()
 
-foreach(CRYPTO_LIB IN LISTS CRYPTO_HASH CRYPTO_CIPHER CRYPTO_UTIL CRYPTO_PROTOCOL)
+foreach(CRYPTO_LIB IN LISTS CRYPTO_HASH CRYPTO_CIPHER CRYPTO_UTIL CRYPTO_PROTOCOL CRYPTO_PUBLICKEY CRYPTO_MATH)
   target_compile_definitions(${CRYPTO_LIB}
     PRIVATE
       ARGTYPE=3
       HAVE_STDINT_H
+      PYCRYPTO_LITTLE_ENDIAN
   )
+  if(_X86_ OR _X64_)
+    target_compile_definitions(${CRYPTO_LIB}
+      PRIVATE
+        USE_SSE2
+        HAVE_WMMINTRIN_H
+        HAVE_TMMINTRIN_H
+    )
+  endif()
 
   if (HAVE_INTRIN_H)
     target_compile_definitions(${CRYPTO_LIB}
       PRIVATE
-      HAVE_INTRIN_H
+        HAVE_INTRIN_H
     )
   endif()
 
   if (HAVE_CPUID_H)
     target_compile_definitions(${CRYPTO_LIB}
       PRIVATE
-      HAVE_CPUID_H
+        HAVE_CPUID_H
+        USE_SSE2
     )
   endif()
+
+  target_compile_options(${CRYPTO_LIB}
+    PRIVATE
+      /sdl-
+  )
 
   target_sources(${CRYPTO_LIB}
     PRIVATE
@@ -262,6 +365,10 @@ foreach(CRYPTO_LIB IN LISTS CRYPTO_HASH CRYPTO_CIPHER CRYPTO_UTIL CRYPTO_PROTOCO
     set(CRYPTO_INSTALL bin/Python/Lib/site-packages/${NAMESPACE}/Cipher/)
   elseif(${CRYPTO_LIB} IN_LIST CRYPTO_UTIL)
     set(CRYPTO_INSTALL bin/Python/Lib/site-packages/${NAMESPACE}/Util/)
+  elseif(${CRYPTO_LIB} IN_LIST CRYPTO_PUBLICKEY)
+    set(CRYPTO_INSTALL bin/Python/Lib/site-packages/${NAMESPACE}/PublicKey/)
+  elseif(${CRYPTO_LIB} IN_LIST CRYPTO_MATH)
+    set(CRYPTO_INSTALL bin/Python/Lib/site-packages/${NAMESPACE}/Math/)
   else()
     set(CRYPTO_INSTALL bin/Python/Lib/site-packages/${NAMESPACE}/Protocol/)
   endif()

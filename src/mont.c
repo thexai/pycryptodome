@@ -37,16 +37,6 @@
 #include "modexp_utils.h"
 #include "mont.h"
 
-#if SYS_BITS == 32
-#include "multiply_32.c"
-#else
-#if SYS_BITS == 64
-#include "multiply_64.c"
-#else
-#error You must define the macro SYS_BITS
-#endif
-#endif
-
 #if defined(USE_SSE2)
 #if defined(HAVE_INTRIN_H)
 #include <intrin.h>
