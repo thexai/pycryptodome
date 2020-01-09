@@ -19,6 +19,7 @@ check_symbol_exists(_AMD64_ "Windows.h" _AMD64_)
 check_symbol_exists(_ARM_ "Windows.h" _ARM_)
 check_symbol_exists(_ARM64_ "Windows.h" _ARM64_)
 
+message("_X86 ${_X86_} _AMD64_ ${_AMD64_} _ARM_ ${_ARM_} _ARM64_ ${_ARM64_}")
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)
   set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} /arch:sse2")
 endif()
@@ -102,7 +103,7 @@ add_library(_ghash_portable
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ghash_portable.c
 )
 
-if(_X86_ OR _X64_)
+if(_X86_ OR _AMD64_)
 add_library(_ghash_clmul
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ghash_clmul.c
 )
@@ -119,7 +120,7 @@ add_library(_raw_aes
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AES.c
 )
 
-if(_X86_ OR _X64_)
+if(_X86_ OR _AMD64_)
 add_library(_raw_aesni
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AESNI.c
 )
@@ -152,7 +153,7 @@ add_library(_raw_des3
   ${CMAKE_CURRENT_SOURCE_DIR}/src/DES3.c
 )
 
-if(_X86_ OR _X64_)
+if(_X86_ OR _AMD64_)
 add_library(_cpuid_c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cpuid.c
 )
@@ -289,10 +290,11 @@ set(CRYPTO_PROTOCOL _scrypt)
 set(CRYPTO_PUBLICKEY _ec_ws)
 set(CRYPTO_MATH _modexp)
 
-if(_X86_ OR _X64_)
+if(_X86_ OR _AMD64_)
   list(APPEND CRYPTO_HASH _ghash_clmul)
   list(APPEND CRYPTO_CIPHER _raw_aesni)
   list(APPEND CRYPTO_UTIL _cpuid_c)
+  message("CRYPTO_UTIL: ${CRYPTO_UTIL}")
 endif()
 
 foreach(CRYPTO_LIB IN LISTS CRYPTO_HASH CRYPTO_CIPHER CRYPTO_UTIL CRYPTO_PROTOCOL CRYPTO_PUBLICKEY CRYPTO_MATH)
@@ -302,7 +304,7 @@ foreach(CRYPTO_LIB IN LISTS CRYPTO_HASH CRYPTO_CIPHER CRYPTO_UTIL CRYPTO_PROTOCO
       HAVE_STDINT_H
       PYCRYPTO_LITTLE_ENDIAN
   )
-  if(_X86_ OR _X64_)
+  if(_X86_ OR _AMD64_)
     target_compile_definitions(${CRYPTO_LIB}
       PRIVATE
         USE_SSE2
