@@ -377,10 +377,7 @@ foreach(CRYPTO_LIB IN LISTS CRYPTO_HASH CRYPTO_CIPHER CRYPTO_UTIL CRYPTO_PROTOCO
 
   target_link_options(${CRYPTO_LIB}
     PRIVATE
-      /NODEFAULTLIB:vccorlibd
-      /NODEFAULTLIB:msvcrtd
-      /NODEFAULTLIB:vccorlib
-      /NODEFAULTLIB:msvcrt
+      /NODEFAULTLIB
       /INCREMENTAL:NO
       /debug
   )
